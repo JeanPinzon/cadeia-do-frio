@@ -66,7 +66,7 @@ class ResultadoViagem:
     violacao: int  # primeiro minuto com a temperatura real acima do máximo (-1 se não houve)
     ia: int  # primeiro alerta de IA a partir do início da falha (-1 se não houve)
     ia_tipo: str
-    ia_falsos: int  # alertas de IA sem falha ou antes do início dela
+    ia_falsos: int  # alertas de IA antes da falha ou de outro tipo
     limite: int
     limite_falsos: int
     limite_porta: int
@@ -115,7 +115,8 @@ def avaliar_viagem(semente: int, falha: str, modelo: ModeloCiclo) -> tuple[Resul
     violacao = primeira_violacao(bruto, c.maximo, inicio)
 
     ia_alertas = [a for a in mon.alertas if a.tipo in ALERTAS_IA]
-    ia_falsos = sum(1 for a in ia_alertas if inicio < 0 or a.minuto < inicio)
+    # falso: qualquer alerta antes da falha, ou de um tipo que não é o da falha
+    ia_falsos = sum(1 for a in ia_alertas if a.minuto < inicio or a.tipo not in ALERTAS_DA_FALHA.get(falha, set()))
     da_falha = [a for a in ia_alertas if a.tipo in ALERTAS_DA_FALHA.get(falha, set()) and a.minuto >= inicio]
     ia = da_falha[0].minuto if da_falha else -1
     ia_tipo = da_falha[0].tipo if da_falha else ""
@@ -147,6 +148,9 @@ def resumir(res: list[ResultadoViagem]) -> dict:
         "limite_porta": int((normais.limite_porta_falsos > 0).sum()),
         "de": len(normais),
     }
+
+    com_falha = df[df.falha != "nenhuma"]
+    out["viagens_com_falha_e_alerta_errado"] = {"ia": int((com_falha.ia_falsos > 0).sum()), "de": len(com_falha)}
 
     for tipo in ("compressor", "porta"):
         f = df[df.falha == tipo]

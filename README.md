@@ -51,13 +51,14 @@ A demo roda quatro caminhões: o IOT-1021 com o compressor falhando, o IOT-2087 
 | | IA | Limite fixo | Limite que ignora entregas |
 |---|---|---|---|
 | Viagens normais com alarme falso (de 80) | 0 | 18 | 0 |
+| Viagens com porta mal fechada que também receberam alerta de compressor (de 50) | 3 | | |
 | Falha de compressor: avisou antes de a carga sair da faixa (de 66) | 65 | 63 (1) | 3 |
-| Falha de compressor: antecedência mediana | 125 min | 19 min (1) | 0 min |
+| Falha de compressor: antecedência mediana | 124 min | 19 min (1) | 0 min |
 | Porta mal fechada: detectadas (de 50) e atraso mediano | 50, 2 min | 50, 7 min | 26, 48 min |
 
 (1) O limite fixo só "avisa antes" porque toca nas aberturas de porta das entregas, as mesmas que geram os 18 alarmes falsos. Quem recebe esse alarme não tem como saber se é entrega ou compressor.
 
-Os parâmetros do monitor foram ajustados em outro conjunto de 80 viagens (`frio avaliar --conjunto ajuste`). O teste rodou uma vez, com tudo congelado. As figuras do relatório saem de `uv run python relatorio/figuras.py`.
+Os parâmetros do monitor foram ajustados em outro conjunto de 80 viagens (`frio avaliar --conjunto ajuste`). A primeira rodada do teste revelou um defeito (o modelo usava a própria temperatura alta para justificar o compressor no máximo, e uma falha passou sem alerta). A correção, por sua vez, gerava alerta de compressor depois de uma porta aberta por muito tempo, o que corrigimos também. O teste rodou três vezes; a tabela é da versão final e o relatório conta as três rodadas. As figuras do relatório saem de `uv run python relatorio/figuras.py`.
 
 ## Limites
 

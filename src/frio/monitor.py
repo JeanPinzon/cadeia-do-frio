@@ -32,6 +32,8 @@ PORTA_FORA_DE_ENTREGA = 3  # minutos
 PORTA_NA_ENTREGA = 12  # minutos
 JANELA_TENDENCIA = 30
 PORTA_RECUPERACAO = 15  # minutos que o baú leva para voltar à faixa depois de uma entrega
+DESVIO_MAX_SEM_PORTA = 0.5  # °C
+RECUPERACAO_MAX = 45  # minutos: depois disso, mesmo sem voltar ao setpoint, o baú já deveria ter se recuperado
 
 
 @dataclass
@@ -54,6 +56,7 @@ class Monitor:
     minutos_fora: int = 0
     porta_aberta_desde: int | None = None
     ultima_porta: int = -10_000
+    voltou_ao_setpoint: bool = True  # desde a última abertura de porta
     alertas: list[Alerta] = field(default_factory=list)
     _ativos: set[str] = field(default_factory=set)
     _calib: list[tuple[float, float]] = field(default_factory=list)
@@ -79,6 +82,9 @@ class Monitor:
             self._temps.append(temp)
         if porta:
             self.ultima_porta = m
+            self.voltou_ao_setpoint = False
+        elif temp is not None and temp <= c.setpoint + DESVIO_MAX_SEM_PORTA:
+            self.voltou_ao_setpoint = True
 
         # 1. deriva do compressor
         previsto = None
@@ -87,7 +93,12 @@ class Monitor:
                 self.modelo.prever(
                     {
                         "delta_externa": l["temp_externa"] - c.setpoint,
-                        "desvio": temp - c.setpoint,
+                        # longe de uma entrega o baú deveria estar no setpoint: um desvio alto ali
+                        # é sintoma, não explicação, então não deixa o modelo usá-lo para justificar
+                        # o compressor no máximo
+                        "desvio": temp - c.setpoint
+                        if not self._bau_recuperado(m)
+                        else min(temp - c.setpoint, DESVIO_MAX_SEM_PORTA),
                         "porta": porta,
                         "porta_recente": sum(self._porta10),
                     }
@@ -141,6 +152,12 @@ class Monitor:
             return []
         self._ativos.add(tipo)
         return [Alerta(minuto, tipo, msg, "")]
+
+    def _bau_recuperado(self, m: int) -> bool:
+        """Longe de uma entrega o baú deveria estar no setpoint."""
+        if m - self.ultima_porta <= PORTA_RECUPERACAO:
+            return False
+        return self.voltou_ao_setpoint or m - self.ultima_porta > RECUPERACAO_MAX
 
     def eficiencia_estimada(self) -> float | None:
         """Quanto o compressor está rendendo em relação ao normal (1,0 = normal)."""
