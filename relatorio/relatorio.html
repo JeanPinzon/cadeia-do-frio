@@ -76,6 +76,10 @@ Código: https://github.com/JeanPinzon/cadeia-do-frio</div>
 <h2>3. Desenvolvimento e funcionalidades</h2>
 <p>O código está em Python, organizado como pacote (<code>src/frio</code>) com uma linha de comando: <code>frio treinar</code>, <code>frio avaliar</code>, <code>frio demo</code> e <code>frio painel</code>. Usa pandas e NumPy para os dados, scikit-learn para o modelo, paho-mqtt para a comunicação, SQLite para guardar as leituras e os alertas, Parquet para os dados da avaliação e Streamlit com Plotly para o painel. Há 14 testes automatizados (pytest) cobrindo a limpeza da borda, o simulador e o monitor.</p>
 <p>O painel mostra a frota no mapa, com cor por situação; um cartão por caminhão com temperatura, faixa da carga, eficiência estimada do compressor e vida útil restante em dias; a lista de alertas com a ação sugerida; e os gráficos da viagem escolhida (temperatura, ciclo e CUSUM). Ele se atualiza a cada 2 segundos enquanto a demo roda.</p>
+<figure>
+<img src="figuras/painel.png" alt="Painel da demonstração">
+<figcaption>Figura 2. Painel ao fim da demonstração com quatro caminhões. O IOT-1021 (vacinas) recebeu o alerta de compressor no minuto 291, mais de quatro horas antes de a carga sair da faixa no minuto 546; o IOT-2087 foi avisado da porta aberta fora de um ponto de entrega.</figcaption>
+</figure>
 <p>Cada alerta vem com uma ação. Na deriva do compressor, a mensagem diz quanto ele está rendendo (por exemplo, "cerca de 61% do normal"), que a carga ainda está na faixa e sugere antecipar as entregas restantes e agendar manutenção. Na previsão de violação, sugere desviar para o centro de distribuição mais próximo, calculado pelo GPS. Na porta, sugere ligar para o motorista.</p>
 
 <h2>4. Análise de resultados</h2>
@@ -96,12 +100,12 @@ Código: https://github.com/JeanPinzon/cadeia-do-frio</div>
 
 <figure>
 <img src="figuras/viagem-compressor.png" alt="Viagem com falha de compressor">
-<figcaption>Figura 2. Uma viagem de teste com falha de compressor (vacinas). A temperatura segue normal por mais de duas horas depois do início da falha, mas o ciclo do compressor sobe e o CUSUM passa do limite 127 minutos antes de a carga sair da faixa.</figcaption>
+<figcaption>Figura 3. Uma viagem de teste com falha de compressor (vacinas). A temperatura segue normal por mais de duas horas depois do início da falha, mas o ciclo do compressor sobe e o CUSUM passa do limite 127 minutos antes de a carga sair da faixa.</figcaption>
 </figure>
 
 <figure>
 <img src="figuras/antecedencia.png" alt="Distribuição da antecedência">
-<figcaption>Figura 3. Antecedência do alerta da IA nas 66 viagens com falha de compressor em que a carga saiu da faixa. Valores negativos: o alerta veio depois.</figcaption>
+<figcaption>Figura 4. Antecedência do alerta da IA nas 66 viagens com falha de compressor em que a carga saiu da faixa. Valores negativos: o alerta veio depois.</figcaption>
 </figure>
 
 <p>O teste rodou três vezes, e as duas primeiras mostraram defeitos do método. Na primeira, uma falha de compressor numa viagem de carnes passou sem alerta: o CUSUM chegou perto do limite e voltou a zero enquanto a carga esquentava até 18 °C. O modelo tinha aprendido com as entregas que, com o baú quente, o compressor fica no máximo. Então, com o baú quente por causa da falha, achava normal o compressor no máximo, e o excesso sumia. Corrigimos limitando o desvio de temperatura que o modelo recebe quando o baú já deveria estar no setpoint. Na segunda rodada, essa correção pegou todas as falhas, mas na demo apareceu outro problema: depois de uma porta aberta por 40 minutos, o baú leva mais de 15 minutos para esfriar, e o monitor confundia essa recuperação com o compressor falhando. Passamos a aplicar o limite só depois que a temperatura volta ao setpoint (ou depois de 45 minutos sem porta) e a contar como falso todo alerta de tipo errado. A tabela é da terceira rodada. Nela, a viagem de carnes passa a ter alerta, mas 42 minutos depois de a carga sair da faixa, e 3 das 50 viagens de porta ainda recebem um alerta de compressor depois de a porta fechar. Na primeira rodada foram 69 de 70 falhas detectadas, 65 de 66 avisadas antes e 125 minutos de mediana. Como usamos o teste para achar esses defeitos, ele deixou de ser totalmente independente, e por isso registramos as três rodadas.</p>
