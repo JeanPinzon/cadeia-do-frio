@@ -1,5 +1,3 @@
-"""Gera as figuras do relatório a partir da avaliação (rode `frio avaliar` antes)."""
-
 from pathlib import Path
 
 import matplotlib.pyplot as plt

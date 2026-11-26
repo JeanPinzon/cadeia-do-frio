@@ -1,19 +1,3 @@
-"""Simulador de um baú refrigerado em viagem de entregas.
-
-Cada minuto gera uma leitura dos sensores do baú: temperatura interna,
-umidade, porta, temperatura externa, ciclo do compressor (fração do minuto
-em que ele ficou ligado) e GPS. A física é um balanço térmico simples:
-
-    calor que entra = isolamento * (externa - interna) + porta * (externa - interna)
-    frio entregue  = min(calor que entra + ganho * (interna - setpoint), capacidade * eficiência)
-
-Falhas injetadas (com gabarito salvo junto):
-    compressor: a eficiência cai aos poucos a partir de um minuto sorteado
-    porta: a porta fica aberta por 20 a 45 minutos fora de uma entrega
-Além disso, o sensor de temperatura tem picos e buracos de leitura, como no
-mundo real.
-"""
-
 from __future__ import annotations
 
 import math
@@ -24,7 +8,6 @@ import pandas as pd
 
 from .cargas import CARGAS, Carga
 
-# Centros de distribuição e cidades de entrega (RS)
 CDS = {
     "CD Porto Alegre": (-30.0346, -51.2177),
     "CD Caxias do Sul": (-29.1678, -51.1794),
@@ -88,7 +71,6 @@ def _distancia_km(a: tuple[float, float], b: tuple[float, float]) -> float:
 
 
 def montar_rota(rng: np.random.Generator) -> tuple[list[Parada], np.ndarray, int]:
-    """Sorteia as paradas e devolve (paradas, posição por minuto, duração)."""
     origem = CDS["CD Porto Alegre"]
     n = int(rng.integers(5, 9))
     nomes = list(rng.choice(list(CIDADES), size=n, replace=False))
@@ -140,11 +122,6 @@ def simular_viagem(
     inicio: pd.Timestamp | None = None,
     ruido_sensor: bool = True,
 ) -> pd.DataFrame:
-    """Simula uma viagem inteira e devolve uma linha por minuto.
-
-    As colunas que começam com ``verdade_`` são o gabarito e não chegam ao
-    sistema de monitoramento.
-    """
     rng = np.random.default_rng(seed)
     c: Carga = CARGAS[carga or str(rng.choice(list(CARGAS)))]
     caminhao = caminhao or f"IOT-{int(rng.integers(1000, 9999))}"

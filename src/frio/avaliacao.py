@@ -1,17 +1,3 @@
-"""Avaliação com viagens simuladas e gabarito conhecido.
-
-Compara o monitor com dois alarmes clássicos de limite fixo:
-    limite: dispara na primeira leitura acima do máximo da carga
-    limite_porta: o mesmo, mas ignora os 15 minutos depois de uma abertura de
-        porta, para não tocar a cada entrega
-
-Na falha de compressor só contam os alertas de compressor da IA
-(deriva_compressor e previsao_violacao); na de porta, só porta_aberta.
-
-Sementes separadas para treino (10000+), ajuste (15000+) e teste (20000+).
-Os parâmetros do monitor foram escolhidos olhando só as viagens de ajuste.
-"""
-
 from __future__ import annotations
 
 import json
@@ -63,10 +49,10 @@ class ResultadoViagem:
     falha: str
     carga: str
     inicio_falha: int
-    violacao: int  # primeiro minuto com a temperatura real acima do máximo (-1 se não houve)
-    ia: int  # primeiro alerta de IA a partir do início da falha (-1 se não houve)
+    violacao: int
+    ia: int
     ia_tipo: str
-    ia_falsos: int  # alertas de IA antes da falha ou de outro tipo
+    ia_falsos: int
     limite: int
     limite_falsos: int
     limite_porta: int
@@ -74,9 +60,6 @@ class ResultadoViagem:
 
 
 def primeira_violacao(bruto: pd.DataFrame, maximo: float, inicio: int) -> int:
-    """Primeiro minuto, depois do início da falha, com a temperatura real acima
-    do máximo sem porta aberta nos 15 minutos anteriores (excursões curtas de
-    entrega não contam). -1 se não houve."""
     porta_recente = _porta_recente(bruto)
     acima = (bruto["verdade_temp"].to_numpy() > maximo) & ~porta_recente
     acima[: max(inicio, 0)] = False
@@ -88,14 +71,12 @@ def _porta_recente(bruto: pd.DataFrame) -> np.ndarray:
 
 
 def _primeiro(minutos: list[int], inicio: int) -> tuple[int, int]:
-    """(primeiro alarme depois do início da falha, quantos alarmes antes dele)."""
     validos = [m for m in minutos if inicio >= 0 and m >= inicio]
     falsos = [m for m in minutos if inicio < 0 or m < inicio]
     return (validos[0] if validos else -1), len(falsos)
 
 
 def _episodios(acima: np.ndarray, persistencia: int) -> list[int]:
-    """Minutos em que um alarme de limite dispara (um por episódio)."""
     disparos, seguidos = [], 0
     for m, a in enumerate(acima):
         seguidos = seguidos + 1 if a else 0
@@ -115,7 +96,6 @@ def avaliar_viagem(semente: int, falha: str, modelo: ModeloCiclo) -> tuple[Resul
     violacao = primeira_violacao(bruto, c.maximo, inicio)
 
     ia_alertas = [a for a in mon.alertas if a.tipo in ALERTAS_IA]
-    # falso: qualquer alerta antes da falha, ou de um tipo que não é o da falha
     ia_falsos = sum(1 for a in ia_alertas if a.minuto < inicio or a.tipo not in ALERTAS_DA_FALHA.get(falha, set()))
     da_falha = [a for a in ia_alertas if a.tipo in ALERTAS_DA_FALHA.get(falha, set()) and a.minuto >= inicio]
     ia = da_falha[0].minuto if da_falha else -1

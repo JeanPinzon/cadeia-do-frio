@@ -1,18 +1,3 @@
-"""Monitor de uma viagem, rodando na nuvem minuto a minuto.
-
-Junta quatro análises sobre a leitura tratada pela borda:
-
-1. Deriva do compressor (IA): compara o ciclo medido com o previsto pelo
-   modelo e acumula o excesso com CUSUM. Dispara antes de a temperatura sair
-   da faixa.
-2. Porta (regra com GPS): porta aberta fora de um ponto de entrega, ou por
-   tempo demais num ponto de entrega.
-3. Previsão de violação: com o compressor no limite, projeta a tendência da
-   temperatura e estima em quantos minutos ela sai da faixa.
-4. Vida útil (Q10): quanto da vida da carga já foi consumido pelo histórico
-   térmico desta viagem.
-"""
-
 from __future__ import annotations
 
 from collections import deque
@@ -24,16 +9,16 @@ from .cargas import CARGAS
 from .decisao import recomendar
 from .modelo import ModeloCiclo
 
-CALIBRAR_MIN = 60  # minutos usados para calibrar o baú no começo da viagem
-CUSUM_FOLGA = 0.06  # excesso de ciclo tolerado por minuto
+CALIBRAR_MIN = 60
+CUSUM_FOLGA = 0.06
 CUSUM_LIMITE = 3.0
-IGNORAR_APOS_PORTA = 10  # minutos sem atualizar o CUSUM depois de fechar a porta
-PORTA_FORA_DE_ENTREGA = 3  # minutos
-PORTA_NA_ENTREGA = 12  # minutos
+IGNORAR_APOS_PORTA = 10
+PORTA_FORA_DE_ENTREGA = 3
+PORTA_NA_ENTREGA = 12
 JANELA_TENDENCIA = 30
-PORTA_RECUPERACAO = 15  # minutos que o baú leva para voltar à faixa depois de uma entrega
-DESVIO_MAX_SEM_PORTA = 0.5  # °C
-RECUPERACAO_MAX = 45  # minutos: depois disso, mesmo sem voltar ao setpoint, o baú já deveria ter se recuperado
+PORTA_RECUPERACAO = 15
+DESVIO_MAX_SEM_PORTA = 0.5
+RECUPERACAO_MAX = 45
 
 
 @dataclass
@@ -52,11 +37,11 @@ class Monitor:
     minuto: int = 0
     fator: float | None = None
     cusum: float = 0.0
-    vida_consumida: float = 0.0  # fração da vida útil
+    vida_consumida: float = 0.0
     minutos_fora: int = 0
     porta_aberta_desde: int | None = None
     ultima_porta: int = -10_000
-    voltou_ao_setpoint: bool = True  # desde a última abertura de porta
+    voltou_ao_setpoint: bool = True
     alertas: list[Alerta] = field(default_factory=list)
     _ativos: set[str] = field(default_factory=set)
     _calib: list[tuple[float, float]] = field(default_factory=list)
@@ -66,7 +51,6 @@ class Monitor:
     _razao: deque = field(default_factory=lambda: deque(maxlen=JANELA_TENDENCIA))
 
     def atualizar(self, l: dict) -> dict:
-        """Processa uma leitura tratada e devolve o estado com os alertas novos."""
         c = CARGAS[self.carga]
         m = l["minuto"]
         self.minuto = m
@@ -74,7 +58,6 @@ class Monitor:
         self._porta10.append(porta)
         novos: list[Alerta] = []
 
-        # vida útil e tempo fora da faixa
         if temp is not None:
             self.vida_consumida += c.q10 ** ((temp - c.setpoint) / 10) / (c.vida_h * 60)
             if not (c.minimo <= temp <= c.maximo):
@@ -93,9 +76,6 @@ class Monitor:
                 self.modelo.prever(
                     {
                         "delta_externa": l["temp_externa"] - c.setpoint,
-                        # longe de uma entrega o baú deveria estar no setpoint: um desvio alto ali
-                        # é sintoma, não explicação, então não deixa o modelo usá-lo para justificar
-                        # o compressor no máximo
                         "desvio": temp - c.setpoint
                         if not self._bau_recuperado(m)
                         else min(temp - c.setpoint, DESVIO_MAX_SEM_PORTA),
@@ -136,7 +116,6 @@ class Monitor:
         if eta is not None and eta <= 60:
             novos += self._abrir("previsao_violacao", m, f"Temperatura deve passar de {c.maximo:.0f} °C em cerca de {eta:.0f} min")
 
-        # temperatura fora (o alarme clássico, só para registro)
         if temp is not None and temp > c.maximo and m - self.ultima_porta > PORTA_RECUPERACAO:
             novos += self._abrir("temperatura_fora", m, f"Temperatura de {temp:.1f} °C, acima do máximo de {c.maximo:.0f} °C")
         elif temp is not None and temp <= c.maximo:
@@ -154,24 +133,21 @@ class Monitor:
         return [Alerta(minuto, tipo, msg, "")]
 
     def _bau_recuperado(self, m: int) -> bool:
-        """Longe de uma entrega o baú deveria estar no setpoint."""
         if m - self.ultima_porta <= PORTA_RECUPERACAO:
             return False
         return self.voltou_ao_setpoint or m - self.ultima_porta > RECUPERACAO_MAX
 
     def eficiencia_estimada(self) -> float | None:
-        """Quanto o compressor está rendendo em relação ao normal (1,0 = normal)."""
         if self.fator is None:
             return None
         if self._ciclos and np.mean(list(self._ciclos)[-10:]) > 0.95:
-            return None  # no limite: não dá para medir pelo ciclo
+            return None 
         if len(self._razao) < 10:
             return None
         return float(np.clip(np.median(self._razao), 0, 1.2))
 
     def minutos_ate_violar(self) -> float | None:
         c = CARGAS[self.carga]
-        # a janela inteira precisa estar sem porta, senão a subida da entrega entra na tendência
         if len(self._temps) < JANELA_TENDENCIA or self.minuto - self.ultima_porta <= JANELA_TENDENCIA:
             return None
         if np.mean(list(self._ciclos)[-10:]) < 0.95:

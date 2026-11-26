@@ -1,17 +1,3 @@
-"""Modelo do ciclo normal do compressor.
-
-A ideia: um compressor saudável liga uma fração previsível do tempo, que
-depende do calor que entra no baú (temperatura externa, porta, distância do
-setpoint). Quando o compressor perde eficiência, ele precisa ficar mais tempo
-ligado para entregar o mesmo frio. Isso aparece no ciclo horas antes de a
-temperatura interna subir, porque enquanto sobra capacidade o termostato
-compensa a perda.
-
-O modelo é treinado com viagens normais da frota. Cada baú tem isolamento e
-capacidade um pouco diferentes, então na primeira hora de cada viagem o
-monitor calcula um fator de calibração daquele baú.
-"""
-
 from __future__ import annotations
 
 import pickle
@@ -29,7 +15,6 @@ COLUNAS = ["delta_externa", "desvio", "porta", "porta_recente"]
 
 
 def atributos(df: pd.DataFrame) -> pd.DataFrame:
-    """Atributos a partir de leituras tratadas (uma viagem, em ordem)."""
     setpoint = df["carga"].map(lambda c: CARGAS[c].setpoint)
     porta = df["porta"].astype(float)
     return pd.DataFrame(
@@ -59,7 +44,6 @@ class ModeloCiclo:
 
     def prever(self, x: pd.DataFrame | dict) -> np.ndarray:
         linhas = np.array([[x[c] for c in COLUNAS]]) if isinstance(x, dict) else x[COLUNAS].to_numpy()
-        # uma linha por minuto: rodar em várias threads só atrasa
         with threadpool_limits(1):
             return np.clip(self.reg.predict(linhas), 0, 1)
 

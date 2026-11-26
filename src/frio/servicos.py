@@ -1,13 +1,3 @@
-"""Pipeline ao vivo sobre MQTT.
-
-    simulador ──frio/<caminhão>/bruto──▶ borda ──frio/<caminhão>/tratado──▶ nuvem ──▶ SQLite ──▶ painel
-                                          │                                  │
-                                          └──frio/<caminhão>/alarme_local     └──frio/<caminhão>/alerta
-
-Na vida real a borda roda num gateway dentro de cada caminhão. Aqui um único
-processo faz o papel dos gateways de toda a frota.
-"""
-
 from __future__ import annotations
 
 import json
@@ -24,10 +14,9 @@ from .modelo import ModeloCiclo
 from .monitor import Monitor
 from .simulador import simular_viagem
 
-QOS = 1  # pelo menos uma vez: o celular do caminhão cai, a leitura não pode sumir
+QOS = 1
 
 FROTA_DEMO = [
-    # (caminhão, semente, falha, carga)
     ("IOT-1021", 20094, "compressor", "vacinas"),
     ("IOT-2087", 20155, "porta", "laticinios"),
     ("IOT-3310", 20003, "nenhuma", "carnes"),
@@ -45,11 +34,7 @@ def _json(obj: dict) -> str:
     return json.dumps(obj, default=str, ensure_ascii=False)
 
 
-# ---------------------------------------------------------------- simulador
 def simular(host: str, porta: int, velocidade: float, parar: threading.Event | None = None) -> dict[str, int]:
-    """Publica um minuto de cada caminhão a cada ``1/velocidade`` segundos.
-
-    Devolve o último minuto publicado de cada caminhão."""
     viagens = []
     inicio = pd.Timestamp.now().floor("min")
     for nome, semente, falha, carga in FROTA_DEMO:
@@ -71,7 +56,6 @@ def simular(host: str, porta: int, velocidade: float, parar: threading.Event | N
     return {v["caminhao"].iloc[0]: min(m, len(v) - 1) for v in viagens}
 
 
-# ---------------------------------------------------------------- borda
 def borda(host: str, porta: int) -> mqtt.Client:
     gateways: dict[str, Borda] = {}
     em_alarme: set[str] = set()
@@ -81,7 +65,6 @@ def borda(host: str, porta: int) -> mqtt.Client:
         g = gateways.setdefault(l["caminhao"], Borda(l["carga"]))
         t = g.processar(l)
         cli.publish(f"frio/{l['caminhao']}/tratado", _json(t), qos=QOS)
-        # alarme local: sirene/luz na cabine; só publica quando liga ou desliga
         if t["alarme_local"] != (l["caminhao"] in em_alarme):
             em_alarme.symmetric_difference_update({l["caminhao"]})
             aviso = {"minuto": t["minuto"], "temp": t["temp"], "ligado": t["alarme_local"]}
@@ -93,7 +76,6 @@ def borda(host: str, porta: int) -> mqtt.Client:
     return cli
 
 
-# ---------------------------------------------------------------- nuvem
 ESQUEMA = """
 create table if not exists leituras (
     caminhao text, carga text, minuto int, ts text, temp real, temp_status text,
@@ -110,7 +92,6 @@ create table if not exists alertas (
 def abrir_banco(caminho: Path) -> sqlite3.Connection:
     caminho.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(caminho, check_same_thread=False)
-    # WAL: o painel lê enquanto a nuvem escreve, e o commit não espera o disco a cada leitura
     db.executescript("pragma journal_mode=wal; pragma synchronous=normal;" + ESQUEMA)
     return db
 
@@ -151,7 +132,6 @@ def nuvem(host: str, porta: int, banco: Path, modelo: ModeloCiclo) -> mqtt.Clien
 
 
 def demo(host: str, porta: int, banco: Path, modelo: ModeloCiclo, velocidade: float) -> None:
-    """Sobe borda e nuvem, roda o simulador até o fim das viagens."""
     clientes = [borda(host, porta), nuvem(host, porta, banco, modelo)]
     for c in clientes:
         c.loop_start()

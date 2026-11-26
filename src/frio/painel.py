@@ -1,9 +1,3 @@
-"""Painel da central de operações (Streamlit).
-
-Lê o SQLite que a nuvem preenche e atualiza sozinho a cada 2 segundos.
-Uso: frio painel  (ou streamlit run src/frio/painel.py -- saida/frio.db)
-"""
-
 from __future__ import annotations
 
 import sqlite3

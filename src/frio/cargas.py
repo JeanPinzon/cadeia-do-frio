@@ -1,16 +1,14 @@
-"""Tipos de carga refrigerada e suas faixas de temperatura."""
-
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class Carga:
     nome: str
-    minimo: float  # °C
-    maximo: float  # °C
-    setpoint: float  # °C em que o baú é regulado
-    vida_h: float  # vida útil a setpoint, em horas
-    q10: float  # quanto a degradação acelera a cada 10 °C acima do setpoint
+    minimo: float
+    maximo: float
+    setpoint: float
+    vida_h: float
+    q10: float
 
 
 CARGAS = {
